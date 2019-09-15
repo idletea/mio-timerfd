@@ -1,4 +1,31 @@
-use libc::{c_void, c_int};
+//! # mio-timerfd
+//!
+//! A linux timerfd wrapper for mio, making it fairly simple to integrate
+//! timers into mio-based systems with minimal overhead. Reading timerfd(7)
+//! is recommended for using this library, though for simple use all you
+//! really need to know is:
+//!
+//! ```rust
+//! # use std::time::Duration;
+//! # use mio_timerfd::*;
+//! # use mio::*;
+//! let mut timer = TimerFd::new(ClockId::Monotonic).unwrap();
+//! timer.set_timeout(&Duration::from_millis(10)).unwrap();
+//!
+//! let poll = Poll::new().unwrap();
+//! let mut events = Events::with_capacity(64);
+//! poll.register(&timer, Token(0), Ready::readable(), PollOpt::edge()).unwrap();
+//!
+//! // will wait for 10ms to pass
+//! poll.poll(&mut events, None).unwrap();
+//! // always call `read` after the timerfd wakes your thread up, or
+//! // else the readability of the fd isn't going to change and therefore
+//! // the next call to poll will either wake immediately if level triggered,
+//! // or never wake for the timerfd again if edge triggered.
+//! let number_of_timeouts = timer.read().unwrap();
+//! # assert!(number_of_timeouts == 1);
+//! ```
+use libc::{c_int, c_void};
 use mio::unix::EventedFd;
 use mio::{Evented, Poll, PollOpt, Ready, Token};
 use std::io;
@@ -80,13 +107,11 @@ impl TimerFd {
     /// level polling, or never re-waking if edge polling.
     pub fn read(&self) -> io::Result<u64> {
         let mut buf = [0u8; 8];
-        let ret = unsafe {
-            libc::read(self.fd, buf.as_mut_ptr() as *mut c_void, buf.len())
-        };
+        let ret = unsafe { libc::read(self.fd, buf.as_mut_ptr() as *mut c_void, buf.len()) };
         if ret == 8 {
             Ok(u64::from_ne_bytes(buf))
         } else if ret == -1 {
-            let errno = unsafe{ *libc::__errno_location() };
+            let errno = unsafe { *libc::__errno_location() };
             if errno == libc::EAGAIN {
                 Ok(0)
             } else {
@@ -101,7 +126,7 @@ impl TimerFd {
     /// most users it's probably easier to use the `TimerFd::new`.
     ///
     /// Note that this library may cause the thread to block when
-    /// `TimerFd::read` is called if the `TFD_NONBLOCK` flag is 
+    /// `TimerFd::read` is called if the `TFD_NONBLOCK` flag is
     /// not included in the flags.
     pub fn create(clockid: c_int, flags: c_int) -> io::Result<Self> {
         let fd = unsafe { libc::timerfd_create(clockid, flags) };
@@ -257,7 +282,7 @@ mod test {
         assert!(events.is_empty());
         assert!(timer.read().unwrap() == 0);
 
-        // timer should not elapse after its first 
+        // timer should not elapse after its first
         // timeout has passed if we disarm the timer.
         timer.disarm().unwrap();
         poll.poll(&mut events, Some(TIMEOUT)).unwrap();
@@ -310,7 +335,7 @@ mod test {
         assert!(events.is_empty());
         assert!(timer.read().unwrap() == 0);
 
-        // timer should not elapse after its first 
+        // timer should not elapse after its first
         // timeout has passed if we disarm the timer,
         timer.disarm().unwrap();
         poll.poll(&mut events, Some(TIMEOUT)).unwrap();
@@ -319,13 +344,15 @@ mod test {
 
         // timer should elapse after the rearmed timeout
         timer.set_timeout_interval(&TIMEOUT).unwrap();
-        poll.poll(&mut events, Some(TIMEOUT + (TIMEOUT / 2))).unwrap();
+        poll.poll(&mut events, Some(TIMEOUT + (TIMEOUT / 2)))
+            .unwrap();
         assert!(!events.is_empty());
         assert!(timer.read().unwrap() == 1);
 
         // timer should elapse after the rearmed timeout
         timer.set_timeout_interval(&TIMEOUT).unwrap();
-        poll.poll(&mut events, Some(TIMEOUT + (TIMEOUT / 2))).unwrap();
+        poll.poll(&mut events, Some(TIMEOUT + (TIMEOUT / 2)))
+            .unwrap();
         assert!(!events.is_empty());
         assert!(timer.read().unwrap() == 1);
     }
