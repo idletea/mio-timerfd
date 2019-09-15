@@ -1,0 +1,9 @@
+[package]
+name = "mio-timerfd"
+version = "0.1.0"
+authors = ["Terry Kerr <terry@oefd.ca>"]
+edition = "2018"
+
+[dependencies]
+mio = "0.6"
+libc = "0.2"
