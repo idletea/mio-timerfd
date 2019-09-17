@@ -3,6 +3,12 @@ name = "mio-timerfd"
 version = "0.1.0"
 authors = ["Terry Kerr <terry@oefd.ca>"]
 edition = "2018"
+description = "mio support for linux's timerfd"
+repository = "https://github.com/oefd/mio-timerfd"
+documentation = "https://docs.rs/mio-timerfd"
+keywords = ["asynchronous", "mio", "timerfd", "timer", "linux"]
+categories = ["asynchronous"]
+license = "MIT"
 
 [dependencies]
 mio = "0.6"
