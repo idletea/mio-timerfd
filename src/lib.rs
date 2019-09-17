@@ -25,6 +25,14 @@
 //! let number_of_timeouts = timer.read().unwrap();
 //! # assert!(number_of_timeouts == 1);
 //! ```
+//!
+//! Note that any given timer can only ever contain one of:
+//! * a recurring interval at which to tick. When an interval timeout is set
+//! up the first tick will happen one interval's duration after the time at
+//! which the timer's timeout was set. (IE the time to first tick is the same
+//! as the time between each tick.)
+//! * a single timeout which will occur a given duration after the timeout
+//! was set.
 use libc::{c_int, c_void};
 use mio::unix::EventedFd;
 use mio::{Evented, Poll, PollOpt, Ready, Token};
