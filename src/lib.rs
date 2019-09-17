@@ -356,4 +356,109 @@ mod test {
         assert!(!events.is_empty());
         assert!(timer.read().unwrap() == 1);
     }
+
+    #[test]
+    fn multiple_timers() {
+        use std::time::Instant;
+
+        let deadline = Instant::now() + Duration::from_millis(33);
+        let mut count_one = 0;
+        let mut count_two = 0;
+        let mut count_three = 0;
+        let mut count_four = 0;
+
+        let poll = Poll::new().unwrap();
+        let mut events = Events::with_capacity(1024);
+
+        // timer one should tick once at 10ms
+        let mut timer_one = TimerFd::new(ClockId::Monotonic).unwrap();
+        timer_one.set_timeout(&Duration::from_millis(10)).unwrap();
+        poll.register(&timer_one, Token(1), Ready::readable(), PollOpt::edge())
+            .unwrap();
+
+        // timer two should tick each 10ms
+        let mut timer_two = TimerFd::new(ClockId::Monotonic).unwrap();
+        timer_two
+            .set_timeout_interval(&Duration::from_millis(10))
+            .unwrap();
+        poll.register(&timer_two, Token(2), Ready::readable(), PollOpt::edge())
+            .unwrap();
+
+        // timer three should tick once at 20ms
+        let mut timer_three = TimerFd::new(ClockId::Monotonic).unwrap();
+        timer_three.set_timeout(&Duration::from_millis(20)).unwrap();
+        poll.register(&timer_three, Token(3), Ready::readable(), PollOpt::edge())
+            .unwrap();
+
+        // timer four should tick each 30ms
+        let mut timer_four = TimerFd::new(ClockId::Monotonic).unwrap();
+        timer_four
+            .set_timeout_interval(&Duration::from_millis(30))
+            .unwrap();
+        poll.register(&timer_four, Token(4), Ready::readable(), PollOpt::edge())
+            .unwrap();
+
+        loop {
+            poll.poll(&mut events, Some(deadline - Instant::now()))
+                .unwrap();
+            if events.is_empty() {
+                break;
+            }
+            for event in events.iter() {
+                match event.token() {
+                    Token(1) => {
+                        let _ = timer_one.read();
+                        count_one += 1;
+                        if count_one == 1 {
+                            assert!(count_two <= 1);
+                            assert!(count_three == 0);
+                            assert!(count_four == 0);
+                            timer_one.set_timeout(&Duration::from_millis(15)).unwrap();
+                        }
+                    }
+                    Token(2) => {
+                        let _ = timer_two.read();
+                        count_two += 1;
+                        assert!(count_two == 1 || count_two == 2);
+                        // only let this timer tick twice
+                        if count_two >= 2 {
+                            timer_two.disarm().unwrap();
+                        }
+                        // check ticks on other clocks make sense
+                        if count_two == 1 {
+                            assert!(count_one <= 1);
+                            assert!(count_three == 0);
+                            assert!(count_four == 0);
+                        } else if count_two == 2 {
+                            assert!(count_one == 1);
+                            assert!(count_three <= 1);
+                            assert!(count_four == 0);
+                        }
+                    }
+                    Token(3) => {
+                        let _ = timer_three.read();
+                        count_three += 1;
+                        assert!(count_one == 1);
+                        assert!(count_two == 1 || count_two == 2);
+                        assert!(count_three == 1);
+                        assert!(count_four == 0);
+                    }
+                    Token(4) => {
+                        let _ = timer_four.read();
+                        count_four += 1;
+                        assert!(count_one == 2);
+                        assert!(count_two == 2);
+                        assert!(count_three == 1);
+                        assert!(count_four == 1);
+                    }
+                    _ => unreachable!(),
+                }
+            }
+        }
+
+        assert!(count_one == 2);
+        assert!(count_two == 2);
+        assert!(count_three == 1);
+        assert!(count_four == 1);
+    }
 }
