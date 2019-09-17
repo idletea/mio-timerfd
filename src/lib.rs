@@ -118,7 +118,7 @@ impl TimerFd {
                 Err(io::Error::from_raw_os_error(errno))
             }
         } else {
-            panic!("reading a timerfd and encountered end of file");
+            panic!("reading a timerfd should never yield {} bytes", ret);
         }
     }
 
