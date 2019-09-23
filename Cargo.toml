@@ -1,6 +1,6 @@
 [package]
 name = "mio-timerfd"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Terry Kerr <terry@oefd.ca>"]
 edition = "2018"
 description = "mio support for linux's timerfd"

@@ -209,6 +209,12 @@ impl Evented for TimerFd {
     }
 }
 
+impl Drop for TimerFd {
+    fn drop(&mut self) {
+        let _ = unsafe { libc::close(self.fd) };
+    }
+}
+
 //
 //
 // ClockId
@@ -363,6 +369,40 @@ mod test {
             .unwrap();
         assert!(!events.is_empty());
         assert!(timer.read().unwrap() == 1);
+    }
+
+    #[test]
+    fn deregister_and_drop() {
+        let poll = Poll::new().unwrap();
+        let mut events = Events::with_capacity(1024);
+
+        let mut timer_one = TimerFd::new(ClockId::Monotonic).unwrap();
+        timer_one.set_timeout(&Duration::from_millis(8)).unwrap();
+        poll.register(&timer_one, Token(1), Ready::readable(), PollOpt::edge())
+            .unwrap();
+        let mut timer_two = TimerFd::new(ClockId::Monotonic).unwrap();
+        timer_two.set_timeout(&Duration::from_millis(10)).unwrap();
+        poll.register(&timer_two, Token(2), Ready::readable(), PollOpt::edge())
+            .unwrap();
+
+        // ensure we can deregister and drop a previously
+        // registered timer without any issue.
+        poll.poll(&mut events, Some(Duration::from_millis(5)))
+            .unwrap();
+        assert!(events.is_empty());
+        timer_one.deregister(&poll).unwrap();
+        std::mem::drop(timer_one);
+
+        poll.poll(&mut events, Some(Duration::from_millis(10)))
+            .unwrap();
+        assert!(!events.is_empty());
+        for event in events.iter() {
+            match event.token() {
+                Token(1) => panic!(),
+                Token(2) => {}
+                _ => panic!(),
+            }
+        }
     }
 
     #[test]
