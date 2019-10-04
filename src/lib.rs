@@ -67,7 +67,8 @@ impl TimerFd {
 
     /// Set a single timeout to occur after the specified duration.
     pub fn set_timeout(&mut self, timeout: &Duration) -> io::Result<()> {
-        // this is overflow safe unless the timoeout is > ~292 billion years.
+        // this is overflow safe unless the timeout is > sizeof(long) seconds,
+        // which is a healthy ~68 years for 32 bit or ~2 billion years for 64 bit.
         let new_value = libc::itimerspec {
             it_interval: libc::timespec {
                 tv_sec: 0,
