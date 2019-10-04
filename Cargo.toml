@@ -1,6 +1,6 @@
 [package]
 name = "mio-timerfd"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Terry Kerr <terry@oefd.ca>"]
 edition = "2018"
 description = "mio support for linux's timerfd"
@@ -9,6 +9,9 @@ documentation = "https://docs.rs/mio-timerfd"
 keywords = ["asynchronous", "mio", "timerfd", "timer", "linux"]
 categories = ["asynchronous"]
 license = "MIT"
+
+[badges]
+travis-ci = { repository = "oefd/mio-timerfd", branch = "master" }
 
 [dependencies]
 mio = "0.6"

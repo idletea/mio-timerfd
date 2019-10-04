@@ -256,7 +256,7 @@ mod test {
     use mio::Events;
 
     const TOK: Token = Token(0);
-    const TIMEOUT: Duration = Duration::from_millis(6);
+    const TIMEOUT: Duration = Duration::from_millis(60);
 
     #[test]
     fn single_timeout() {
@@ -378,11 +378,11 @@ mod test {
         let mut events = Events::with_capacity(1024);
 
         let mut timer_one = TimerFd::new(ClockId::Monotonic).unwrap();
-        timer_one.set_timeout(&Duration::from_millis(8)).unwrap();
+        timer_one.set_timeout(&Duration::from_millis(32)).unwrap();
         poll.register(&timer_one, Token(1), Ready::readable(), PollOpt::edge())
             .unwrap();
         let mut timer_two = TimerFd::new(ClockId::Monotonic).unwrap();
-        timer_two.set_timeout(&Duration::from_millis(10)).unwrap();
+        timer_two.set_timeout(&Duration::from_millis(64)).unwrap();
         poll.register(&timer_two, Token(2), Ready::readable(), PollOpt::edge())
             .unwrap();
 
@@ -394,7 +394,7 @@ mod test {
         timer_one.deregister(&poll).unwrap();
         std::mem::drop(timer_one);
 
-        poll.poll(&mut events, Some(Duration::from_millis(10)))
+        poll.poll(&mut events, Some(Duration::from_millis(500)))
             .unwrap();
         assert!(!events.is_empty());
         for event in events.iter() {
@@ -410,7 +410,7 @@ mod test {
     fn multiple_timers() {
         use std::time::Instant;
 
-        let deadline = Instant::now() + Duration::from_millis(33);
+        let deadline = Instant::now() + Duration::from_millis(330);
         let mut count_one = 0;
         let mut count_two = 0;
         let mut count_three = 0;
@@ -421,28 +421,28 @@ mod test {
 
         // timer one should tick once at 10ms
         let mut timer_one = TimerFd::new(ClockId::Monotonic).unwrap();
-        timer_one.set_timeout(&Duration::from_millis(10)).unwrap();
+        timer_one.set_timeout(&Duration::from_millis(100)).unwrap();
         poll.register(&timer_one, Token(1), Ready::readable(), PollOpt::edge())
             .unwrap();
 
         // timer two should tick each 10ms
         let mut timer_two = TimerFd::new(ClockId::Monotonic).unwrap();
         timer_two
-            .set_timeout_interval(&Duration::from_millis(10))
+            .set_timeout_interval(&Duration::from_millis(100))
             .unwrap();
         poll.register(&timer_two, Token(2), Ready::readable(), PollOpt::edge())
             .unwrap();
 
         // timer three should tick once at 20ms
         let mut timer_three = TimerFd::new(ClockId::Monotonic).unwrap();
-        timer_three.set_timeout(&Duration::from_millis(20)).unwrap();
+        timer_three.set_timeout(&Duration::from_millis(200)).unwrap();
         poll.register(&timer_three, Token(3), Ready::readable(), PollOpt::edge())
             .unwrap();
 
         // timer four should tick each 30ms
         let mut timer_four = TimerFd::new(ClockId::Monotonic).unwrap();
         timer_four
-            .set_timeout_interval(&Duration::from_millis(30))
+            .set_timeout_interval(&Duration::from_millis(300))
             .unwrap();
         poll.register(&timer_four, Token(4), Ready::readable(), PollOpt::edge())
             .unwrap();
@@ -462,7 +462,7 @@ mod test {
                             assert!(count_two <= 1);
                             assert!(count_three == 0);
                             assert!(count_four == 0);
-                            timer_one.set_timeout(&Duration::from_millis(15)).unwrap();
+                            timer_one.set_timeout(&Duration::from_millis(150)).unwrap();
                         }
                     }
                     Token(2) => {
