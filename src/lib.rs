@@ -74,8 +74,8 @@ impl TimerFd {
                 tv_nsec: 0,
             },
             it_value: libc::timespec {
-                tv_sec: timeout.as_secs() as i64,
-                tv_nsec: i64::from(timeout.subsec_nanos()),
+                tv_sec: timeout.as_secs() as libc::time_t,
+                tv_nsec: timeout.subsec_nanos() as libc::c_long,
             },
         };
         self.settime(0, &new_value).map(|_old_value| ())
@@ -87,12 +87,12 @@ impl TimerFd {
         // this is overflow safe unless the timoeout is > ~292 billion years.
         let new_value = libc::itimerspec {
             it_interval: libc::timespec {
-                tv_sec: timeout.as_secs() as i64,
-                tv_nsec: i64::from(timeout.subsec_nanos()),
+                tv_sec: timeout.as_secs() as libc::time_t,
+                tv_nsec: timeout.subsec_nanos() as libc::c_long,
             },
             it_value: libc::timespec {
-                tv_sec: timeout.as_secs() as i64,
-                tv_nsec: i64::from(timeout.subsec_nanos()),
+                tv_sec: timeout.as_secs() as libc::time_t,
+                tv_nsec: timeout.subsec_nanos() as libc::c_long,
             },
         };
         self.settime(0, &new_value).map(|_old_value| ())
