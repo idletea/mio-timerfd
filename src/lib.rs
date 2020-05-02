@@ -12,9 +12,9 @@
 //! let mut timer = TimerFd::new(ClockId::Monotonic).unwrap();
 //! timer.set_timeout(&Duration::from_millis(10)).unwrap();
 //!
-//! let poll = Poll::new().unwrap();
+//! let mut poll = Poll::new().unwrap();
 //! let mut events = Events::with_capacity(64);
-//! poll.register(&timer, Token(0), Ready::readable(), PollOpt::edge()).unwrap();
+//! poll.registry().register(&mut timer, Token(0), Interest::READABLE).unwrap();
 //!
 //! // will wait for 10ms to pass
 //! poll.poll(&mut events, None).unwrap();
@@ -34,8 +34,9 @@
 //! * a single timeout which will occur a given duration after the timeout
 //! was set.
 use libc::{c_int, c_void};
-use mio::unix::EventedFd;
-use mio::{Evented, Poll, PollOpt, Ready, Token};
+use mio::event::Source;
+use mio::unix::SourceFd;
+use mio::{Interest, Registry, Token};
 use std::io;
 use std::mem::MaybeUninit;
 use std::os::unix::io::{AsRawFd, RawFd};
@@ -184,29 +185,27 @@ impl AsRawFd for TimerFd {
     }
 }
 
-impl Evented for TimerFd {
+impl Source for TimerFd {
     fn register(
-        &self,
-        poll: &Poll,
+        &mut self,
+        registry: &Registry,
         token: Token,
-        interest: Ready,
-        opts: PollOpt,
+        interest: Interest,
     ) -> io::Result<()> {
-        EventedFd(&self.fd).register(poll, token, interest, opts)
+        SourceFd(&self.fd).register(registry, token, interest)
     }
 
     fn reregister(
-        &self,
-        poll: &Poll,
+        &mut self,
+        registry: &Registry,
         token: Token,
-        interest: Ready,
-        opts: PollOpt,
+        interest: Interest,
     ) -> io::Result<()> {
-        EventedFd(&self.fd).reregister(poll, token, interest, opts)
+        SourceFd(&self.fd).reregister(registry, token, interest)
     }
 
-    fn deregister(&self, poll: &Poll) -> io::Result<()> {
-        EventedFd(&self.fd).deregister(poll)
+    fn deregister(&mut self, registry: &Registry) -> io::Result<()> {
+        SourceFd(&self.fd).deregister(registry)
     }
 }
 
@@ -253,18 +252,19 @@ impl Into<c_int> for ClockId {
 #[cfg(test)]
 mod test {
     use super::*;
-    use mio::Events;
+    use mio::{Events, Poll};
 
     const TOK: Token = Token(0);
     const TIMEOUT: Duration = Duration::from_millis(60);
 
     #[test]
     fn single_timeout() {
-        let poll = Poll::new().unwrap();
+        let mut poll = Poll::new().unwrap();
         let mut events = Events::with_capacity(1024);
         let mut timer = TimerFd::new(ClockId::Monotonic).unwrap();
         timer.set_timeout(&TIMEOUT).unwrap();
-        poll.register(&timer, TOK, Ready::readable(), PollOpt::edge())
+        poll.registry()
+            .register(&mut timer, TOK, Interest::READABLE)
             .unwrap();
 
         // timer should not elapse before the timeout
@@ -285,11 +285,12 @@ mod test {
 
     #[test]
     fn disarm_rearm_single_timeout() {
-        let poll = Poll::new().unwrap();
+        let mut poll = Poll::new().unwrap();
         let mut events = Events::with_capacity(1024);
         let mut timer = TimerFd::new(ClockId::Monotonic).unwrap();
         timer.set_timeout(&TIMEOUT).unwrap();
-        poll.register(&timer, TOK, Ready::readable(), PollOpt::edge())
+        poll.registry()
+            .register(&mut timer, TOK, Interest::READABLE)
             .unwrap();
 
         // timer should not elapse before the timeout
@@ -313,11 +314,12 @@ mod test {
 
     #[test]
     fn timeout_interval() {
-        let poll = Poll::new().unwrap();
+        let mut poll = Poll::new().unwrap();
         let mut events = Events::with_capacity(1024);
         let mut timer = TimerFd::new(ClockId::Monotonic).unwrap();
         timer.set_timeout_interval(&TIMEOUT).unwrap();
-        poll.register(&timer, TOK, Ready::readable(), PollOpt::edge())
+        poll.registry()
+            .register(&mut timer, TOK, Interest::READABLE)
             .unwrap();
 
         // timer should not elapse before the timeout
@@ -338,11 +340,12 @@ mod test {
 
     #[test]
     fn disarm_rearm_timeout_interval() {
-        let poll = Poll::new().unwrap();
+        let mut poll = Poll::new().unwrap();
         let mut events = Events::with_capacity(1024);
         let mut timer = TimerFd::new(ClockId::Monotonic).unwrap();
         timer.set_timeout_interval(&TIMEOUT).unwrap();
-        poll.register(&timer, TOK, Ready::readable(), PollOpt::edge())
+        poll.registry()
+            .register(&mut timer, TOK, Interest::READABLE)
             .unwrap();
 
         // timer should not elapse before the timeout
@@ -374,16 +377,18 @@ mod test {
 
     #[test]
     fn deregister_and_drop() {
-        let poll = Poll::new().unwrap();
+        let mut poll = Poll::new().unwrap();
         let mut events = Events::with_capacity(1024);
 
         let mut timer_one = TimerFd::new(ClockId::Monotonic).unwrap();
         timer_one.set_timeout(&Duration::from_millis(32)).unwrap();
-        poll.register(&timer_one, Token(1), Ready::readable(), PollOpt::edge())
+        poll.registry()
+            .register(&mut timer_one, Token(1), Interest::READABLE)
             .unwrap();
         let mut timer_two = TimerFd::new(ClockId::Monotonic).unwrap();
         timer_two.set_timeout(&Duration::from_millis(64)).unwrap();
-        poll.register(&timer_two, Token(2), Ready::readable(), PollOpt::edge())
+        poll.registry()
+            .register(&mut timer_two, Token(2), Interest::READABLE)
             .unwrap();
 
         // ensure we can deregister and drop a previously
@@ -391,7 +396,7 @@ mod test {
         poll.poll(&mut events, Some(Duration::from_millis(5)))
             .unwrap();
         assert!(events.is_empty());
-        timer_one.deregister(&poll).unwrap();
+        poll.registry().deregister(&mut timer_one).unwrap();
         std::mem::drop(timer_one);
 
         poll.poll(&mut events, Some(Duration::from_millis(500)))
@@ -416,13 +421,14 @@ mod test {
         let mut count_three = 0;
         let mut count_four = 0;
 
-        let poll = Poll::new().unwrap();
+        let mut poll = Poll::new().unwrap();
         let mut events = Events::with_capacity(1024);
 
         // timer one should tick once at 10ms
         let mut timer_one = TimerFd::new(ClockId::Monotonic).unwrap();
         timer_one.set_timeout(&Duration::from_millis(100)).unwrap();
-        poll.register(&timer_one, Token(1), Ready::readable(), PollOpt::edge())
+        poll.registry()
+            .register(&mut timer_one, Token(1), Interest::READABLE)
             .unwrap();
 
         // timer two should tick each 10ms
@@ -430,13 +436,17 @@ mod test {
         timer_two
             .set_timeout_interval(&Duration::from_millis(100))
             .unwrap();
-        poll.register(&timer_two, Token(2), Ready::readable(), PollOpt::edge())
+        poll.registry()
+            .register(&mut timer_two, Token(2), Interest::READABLE)
             .unwrap();
 
         // timer three should tick once at 20ms
         let mut timer_three = TimerFd::new(ClockId::Monotonic).unwrap();
-        timer_three.set_timeout(&Duration::from_millis(200)).unwrap();
-        poll.register(&timer_three, Token(3), Ready::readable(), PollOpt::edge())
+        timer_three
+            .set_timeout(&Duration::from_millis(200))
+            .unwrap();
+        poll.registry()
+            .register(&mut timer_three, Token(3), Interest::READABLE)
             .unwrap();
 
         // timer four should tick each 30ms
@@ -444,7 +454,8 @@ mod test {
         timer_four
             .set_timeout_interval(&Duration::from_millis(300))
             .unwrap();
-        poll.register(&timer_four, Token(4), Ready::readable(), PollOpt::edge())
+        poll.registry()
+            .register(&mut timer_four, Token(4), Interest::READABLE)
             .unwrap();
 
         loop {

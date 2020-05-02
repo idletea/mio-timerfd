@@ -1,6 +1,6 @@
 [package]
 name = "mio-timerfd"
-version = "0.1.2"
+version = "0.2.0"
 authors = ["Terry Kerr <terry@oefd.ca>"]
 edition = "2018"
 description = "mio support for linux's timerfd"
@@ -14,5 +14,5 @@ license = "MIT"
 travis-ci = { repository = "oefd/mio-timerfd", branch = "master" }
 
 [dependencies]
-mio = "0.6"
+mio = { version = "0.7", features = ["os-util", "os-poll"] }
 libc = "0.2"
