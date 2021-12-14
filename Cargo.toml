@@ -14,5 +14,5 @@ license = "MIT"
 travis-ci = { repository = "oefd/mio-timerfd", branch = "master" }
 
 [dependencies]
-mio = { version = "0.7", features = ["os-util", "os-poll"] }
+mio = { version = "0.8", features = ["os-ext", "os-poll"] }
 libc = "0.2"
